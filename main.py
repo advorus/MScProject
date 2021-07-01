@@ -1,8 +1,7 @@
 """Run this file."""
 
 from exchange import Exchange
+from order import Order
 
-ASSETS = ['BTC']
+ASSETS = ['BTC','AAPL']
 TEST_EX = Exchange(ASSETS)
-
-print('testing2')
