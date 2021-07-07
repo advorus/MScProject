@@ -2,6 +2,7 @@
 
 from order import Order
 from matchedOrders import MatchedOrders
+from globals import *
 
 class Orderbook():
     """Will hold and store orders - might also contain the matching logic."""
@@ -11,91 +12,154 @@ class Orderbook():
         self.name = name
         self.buffer_length = 1
 
-        #the maximum price that is allowed in the simulation
-        self.MAX_PRICE = 25
-
-        self.orderList = {}
+        self.orderList = {0: [Order('placeholder1',1e10,self.name,1,0,0,'exchange')], 1e10: [Order('placeholder2',1e10,self.name,1,0,1e10, 'exchange')]}
 
         self.best_bid=0
-        self.best_offer = self.MAX_PRICE
+        self.best_offer = 1e10
 
         self.entry_buffer = []
         
-        self.askPrices = set()
-        self.bidPrices = set()
+        self.askPrices = set([1e10])
+        self.bidPrices = set([0])
 
-    def place_order(self, order):
+    def place_order(self, order, order_history):
         """Adds an order to the entry buffer, that will then be processed by the exchange"""
         self.entry_buffer.append(order)
+        print("Adding an order from %s to the buffer"% order.trader_code)
 
+        len(self.entry_buffer)
         if(len(self.entry_buffer)==self.buffer_length):
-            self.empty_buffer()
-
-    def empty_buffer(self, order_history):
+            if MATCHING_PROTOCOL == 'FCFS':
+                print('Emptying buffer as it contains %d orders'%len(self.entry_buffer))
+                for order in self.entry_buffer:
+                    self.empty_order_from_buffer(order, order_history)
+                self.entry_buffer = []
+            else:
+                raise Exception('matching protocol has not been recognised')
+    
+    def empty_order_from_buffer(self, order, order_history):
         #this is where the matching logic comes in
         #for each order in the buffer perform the matching protocol
-        for order in self.entry_buffer:
-            # if the order is a buy order then check against existing ask prices
-            if(order.dir == 0):
-                # cycle until the order has been extinguished, either by
-                # matching or by placing it into the book
-                while order.volume > 0:
-                    print("test")
-
-                    while order.price >= self.best_offer:
-                        best_offer_list = self.orderList[self.best_offer]
-                        while len(best_offer_list) > 0:
-                            sell_order = best_offer_list[0]
-                            if sell_order.volume < order.volume:
-                                # TODO: change the account values in the exchange? Potentially do it
-                                # at the end of each simulation tick - this resembles clearing house
-                                # behaviour in the real world
-
-                                # append the match that just happened to the order history
-                                order_history.append(MatchedOrders(order.trader_code,sell_order.trader_code,sell_order.price,sell_order.volume,order.code,sell_order.code))
-                                
-                                order.volume-=sell_order.volume
-                                best_offer_list.popleft()
-                                print("Matched %d units between buy order %f and sell order %f, execution price %d" % (sell_order.volume,order.code,sell_order.code,sell_order.price))
-                            
-                            else:
-                                #append the match that just happened to the orderbook   
-                                print("foo")
-
-                    # if there is a suitable sell order on the exchange
-                    # then match the order, reducing the volume of the order by
-                    # the amount that has been matched, then publish the match
-                    # that has occurred to the orderHistory
-                    if max(self.askPrices) < order.price:
-                        print("foo")
-                    
-                    # otherwise there is no matching order and the order should
-                    # be placed in the orderbook
-                    else:
-                        print("foo")
-
-            # if the order is a sell order then check against existing bid prices
-            elif order.dir == 1:
-                # cycle until the order has been extinguished, either by
-                # matching or by placing it into the book
-                while order.volume > 0:
-                    print("test")
-                    
-                    # if there is a suitable sell order on the exchange
-                    # then match the order, reducing the volume of the order by
-                    # the amount that has been matched, then publish the match
-                    # that has occurred to the orderHistory
-                    if max(self.askPrices) < order.price:
-                        print("foo")
-                    
-                    # otherwise there is no matching order and the order should
-                    # be placed in the orderbook
-                    else:
-                        print("foo")
-
-            self.price_points[order.price].append(order)
+        # for order in self.entry_buffer:
         
-        self.entry_buffer = []
+        # if the order is a buy order then check against existing ask prices
+        if(order.dir == 0):
+            # cycle until the order has been extinguished, either by
+            # matching or by placing it into the book
+            
+            while order.price >= self.best_offer:
+                
+                best_offer_list = self.orderList[self.best_offer]
+
+                while len(best_offer_list) > 0:
+                    sell_order = best_offer_list[0]
+                    if sell_order.volume <= order.volume:
+                        # TODO: change the account values in the exchange? Potentially do it
+                        # at the end of each simulation tick - this resembles clearing house
+                        # behaviour in the real world
+
+                        # append the match that just happened to the order history
+                        order_history.append(MatchedOrders(order.trader_code,sell_order.trader_code,sell_order.price,sell_order.volume,order.code,sell_order.code))
+                        
+                        order.volume-=sell_order.volume
+                        best_offer_list.pop(0)
+                        print("Matched %d units between buy order %s and sell order %s, execution price %d" % (sell_order.volume,order.code,sell_order.code,sell_order.price))
+                    
+                    else:
+                        if sell_order.volume > order.volume:
+                            sell_order.volume -= order.volume
+                            order.volume = 0
+                        else:
+                            best_offer_list.pop(0)
+                            order.volume = 0
+
+                        order_history.append(MatchedOrders(order.trader_code,sell_order.trader_code,sell_order.price,order.volume,order.code,sell_order.code))
+                        print("Matched %d units between buy order %s and sell order %s, execution price %d" % (order.volume,order.code,sell_order.code,sell_order.price))
+                        return 0
+
+                # only do this when the above is not true        
+                # there are no longer any orders at the given price level        
+                self.askPrices.remove(self.best_offer)
+                # find the new best offer price
+                self.best_offer = min(self.askPrices)
+            
+            #if the code gets to here then place an order in the orderbook with the characteristics of order
+            # to get around the possibility that there is no defined list for the given price
+            if order.volume > 0:
+                try:
+                    self.orderList[order.price]
+                except KeyError:
+                    self.orderList[order.price] = [order]
+                else:
+                    self.orderList[order.price].append(order)
+
+
+                self.bidPrices.add(order.price)
+                print(self.bidPrices)
+                self.best_bid = max(self.bidPrices)
+
+                print("Placed new order in the book - %d units at %d from %s"%(order.volume, order.price,order.trader_code))
+                return 0
+
+        # if the order is a sell order then check against existing bid prices
+        elif order.dir == 1:
+            
+            while order.price <= self.best_bid:
+                # print(self.best_bid)
+                best_offer_list = self.orderList[self.best_bid]
+
+                while len(best_offer_list) > 0:
+                    buy_order = best_offer_list[0]
+                    if buy_order.volume <= order.volume:
+                        # TODO: change the account values in the exchange? Potentially do it
+                        # at the end of each simulation tick - this resembles clearing house
+                        # behaviour in the real world
+
+                        # append the match that just happened to the order history
+                        order_history.append(MatchedOrders(buy_order.trader_code,order.trader_code,buy_order.price,buy_order.volume,buy_order.code,order.code))
+                        
+                        order.volume-=buy_order.volume
+                        best_offer_list.pop(0)
+                        print("Matched %d units between buy order %s and sell order %s, execution price %d" % (buy_order.volume,buy_order.code,order.code,buy_order.price))
+                    
+                    else:
+                        if buy_order.volume > order.volume:
+                            buy_order.volume -= order.volume
+                            order.volume = 0
+                        else:
+                            best_offer_list.pop(0)
+                            order.volume = 0
+                            print('testing')
+
+                        order_history.append(MatchedOrders(buy_order.trader_code,order.trader_code,buy_order.price,order.volume,buy_order.code,order.code))
+                        print("Matched %d units between buy order %s and sell order %s, execution price %d" % (order.volume,buy_order.code,order.code,buy_order.price))
+                        return 0
+
+                # only do this when the above is not true        
+                # there are no longer any orders at the given price level        
+                self.bidPrices.remove(self.best_bid)
+                # find the new best offer price
+                self.best_bid = max(self.bidPrices)
+            
+            #if the code gets to here then place an order in the orderbook with the characteristics of order
+            if(order.volume > 0):
+                try:
+                    self.orderList[order.price]
+                except KeyError:
+                    self.orderList[order.price] = [order]
+                else:
+                    self.orderList[order.price].append(order)
+                
+                self.askPrices.add(order.price)
+                self.best_offer = min(self.askPrices)
+                
+
+                print("Placed new order in the book - %d units at %d from %s"%(order.volume, order.price,order.trader_code))
+                return 0
+
+    def printBuffer(self):
+        for order in self.entry_buffer:
+            order.print()
     
     askPrices = set()
     bidPrices = set()

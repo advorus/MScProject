@@ -5,7 +5,7 @@ class Order():
     """Represents orders which will be sent to the exchange."""
 
     def __init__(
-            self, order_code, volume, asset_code, order_type, order_dir, limit_price, trader_code
+            self, order_code: str, volume: int, asset_code: str, order_type: int, order_dir: int, limit_price: float, trader_code: str
     ):
         """
         Create all necessary variables for LIBRA.
