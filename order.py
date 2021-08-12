@@ -59,3 +59,14 @@ class Order():
         print("Order Direction: ", o_dir)
 
         print("Order Price: ", self.price)
+
+    # function to check if two orders are equal to one another
+    def equals(self, order):
+        if self.code == order.code:
+            if self.trader_code == order.tradercode:
+                if self.asset_code == order.asset_code:
+                    if self.type == order.type:
+                        if self.dir == order.dir:
+                            if self.price - order.price <= 1e-5:
+                                return True
+        return False
